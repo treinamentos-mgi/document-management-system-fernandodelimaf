@@ -4,14 +4,14 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { once } = require('node:events');
 const app = require('../src/app');
+const documentRepository = require('../src/repositories/documentRepository');
 
 const storageDirectory = path.resolve(__dirname, '../storage');
 let server;
 let baseUrl;
-let initialStorageFiles;
+const uploadedFiles = new Set();
 
 before(async () => {
-  initialStorageFiles = new Set(await fs.readdir(storageDirectory));
   server = app.listen(0);
   await once(server, 'listening');
   baseUrl = `http://127.0.0.1:${server.address().port}`;
@@ -22,13 +22,17 @@ after(async () => {
     server.close((error) => (error ? reject(error) : resolve()));
   });
 
-  const storedFiles = await fs.readdir(storageDirectory);
   await Promise.all(
-    storedFiles
-      .filter((filename) => !initialStorageFiles.has(filename))
-      .map((filename) => fs.unlink(path.join(storageDirectory, filename))),
+    [...uploadedFiles].map((filename) => fs.unlink(path.join(storageDirectory, filename))),
   );
 });
+
+function trackUploadedFile(document) {
+  const storedDocument = documentRepository.findById(document.id);
+  assert.ok(storedDocument);
+  uploadedFiles.add(storedDocument.storageName);
+  return storedDocument.storageName;
+}
 
 test('o app backend é exportado', () => {
   assert.ok(app, 'o app deve estar definido');
@@ -47,16 +51,14 @@ test('faz upload com nome adversarial, lista por dono e baixa um documento', asy
 
   assert.equal(uploadResponse.status, 201);
   const document = await uploadResponse.json();
+  const storedFilename = trackUploadedFile(document);
   assert.deepEqual(Object.keys(document), ['id', 'originalName', 'size', 'uploadedAt', 'owner']);
   assert.equal(document.originalName, 'arquivo.txt');
   assert.equal(document.size, Buffer.byteLength('conteudo de teste'));
   assert.equal(document.owner, 'user-1');
 
-  const storedFiles = (await fs.readdir(storageDirectory))
-    .filter((filename) => !initialStorageFiles.has(filename));
-  assert.equal(storedFiles.length, 1);
-  assert.match(storedFiles[0], /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
-  const storedFileStats = await fs.stat(path.join(storageDirectory, storedFiles[0]));
+  assert.match(storedFilename, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+  const storedFileStats = await fs.stat(path.join(storageDirectory, storedFilename));
   assert.equal(storedFileStats.mode & 0o777, 0o600);
 
   const listResponse = await fetch(`${baseUrl}/documents?ownerId=user-1`);
@@ -72,6 +74,33 @@ test('faz upload com nome adversarial, lista por dono e baixa um documento', asy
   assert.equal(await downloadResponse.text(), 'conteudo de teste');
 });
 
+test('lista documentos apenas do dono solicitado e baixa conteúdo binário', async () => {
+  const content = Buffer.from([0, 1, 127, 128, 255]);
+  const documents = [];
+
+  for (const ownerId of ['owner-a', 'owner-b']) {
+    const formData = new FormData();
+    formData.set('ownerId', ownerId);
+    formData.set('file', new Blob([content], { type: 'application/octet-stream' }), 'dados.bin');
+    const response = await fetch(`${baseUrl}/upload`, { method: 'POST', body: formData });
+    assert.equal(response.status, 201);
+    const document = await response.json();
+    trackUploadedFile(document);
+    documents.push(document);
+  }
+
+  for (const [index, ownerId] of ['owner-a', 'owner-b'].entries()) {
+    const response = await fetch(`${baseUrl}/documents?ownerId=${ownerId}`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), [documents[index]]);
+  }
+
+  const response = await fetch(`${baseUrl}/documents/${documents[1].id}/download`);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), 'application/octet-stream');
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), content);
+});
+
 test('retorna erros para dados obrigatórios ausentes e documento inexistente', async () => {
   const listResponse = await fetch(`${baseUrl}/documents`);
   assert.equal(listResponse.status, 400);
@@ -85,6 +114,15 @@ test('retorna erros para dados obrigatórios ausentes e documento inexistente', 
   });
   assert.equal(uploadResponse.status, 400);
   assert.equal((await uploadResponse.json()).error.code, 'file_required');
+
+  const missingOwner = new FormData();
+  missingOwner.set('file', new Blob(['content'], { type: 'text/plain' }), 'arquivo.txt');
+  const missingOwnerResponse = await fetch(`${baseUrl}/upload`, {
+    method: 'POST',
+    body: missingOwner,
+  });
+  assert.equal(missingOwnerResponse.status, 400);
+  assert.equal((await missingOwnerResponse.json()).error.code, 'owner_id_required');
 
   const excessiveFields = new FormData();
   excessiveFields.set('ownerId', 'user-1');
