@@ -48,6 +48,9 @@ export async function downloadDocument(documentMetadata) {
   const link = window.document.createElement('a');
   link.href = objectUrl;
   link.download = documentMetadata.originalName;
+  link.hidden = true;
+  window.document.body.append(link);
   link.click();
-  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }

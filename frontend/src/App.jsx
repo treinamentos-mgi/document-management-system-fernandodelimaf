@@ -41,17 +41,21 @@ export default function App() {
     };
   }, [ownerId, refreshKey]);
 
+  function refreshDocuments() {
+    setRefreshKey((current) => current + 1);
+  }
+
   function applyOwner(event) {
     event.preventDefault();
     const nextOwnerId = ownerDraft.trim();
     setOwnerId(nextOwnerId);
     setNotice('');
-    setRefreshKey((current) => current + 1);
+    refreshDocuments();
   }
 
   function handleUploaded(document) {
     setNotice(`${document.originalName} foi enviado.`);
-    setRefreshKey((current) => current + 1);
+    refreshDocuments();
   }
 
   return (
