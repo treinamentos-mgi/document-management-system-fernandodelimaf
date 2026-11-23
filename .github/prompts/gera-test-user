@@ -1,0 +1,32 @@
+---
+description: "Define um usuário padrão para o DMS e cria um arquivo de texto para teste."
+name: "usuario-teste"
+argument-hint: "identificador padrão (padrão: usuario-teste)"
+agent: "agent"
+---
+
+# Preparar usuário e documento de teste
+
+Configure o DMS para abrir por padrão a biblioteca do usuário
+`${input:usuarioId:usuario-teste}` e crie um arquivo de texto de teste para esse usuário.
+
+## Identificador padrão
+
+- Examine o `frontend/src/App.jsx` e preserve o fluxo existente de upload e listagem.
+- Defina o identificador padrão em um único lugar e use-o para inicializar tanto o valor do campo quanto o usuário ativo.
+- Ao abrir a aplicação, carregue a biblioteca desse usuário sem exigir uma ação inicial no botão “Abrir arquivos”.
+- Mantenha o campo editável para que seja possível abrir outra biblioteca.
+- Preserve as chamadas ao backend via `fetch` com prefixo `/api`.
+- Trate esse identificador apenas como associação funcional de documentos; ele não representa autenticação ou autorização.
+
+## Arquivo de teste
+
+- Crie `backend/test/fixtures/documento-teste.txt`, criando a pasta se necessário.
+- Use conteúdo simples em texto puro que identifique o documento como teste e inclua o identificador `${input:usuarioId:usuario-teste}`.
+- Não grave a fixture em `backend/storage` nem faça upload automaticamente.
+
+## Validação
+
+- Mantenha as alterações restritas ao identificador padrão e à fixture, além de testes diretamente necessários.
+- Execute o build do frontend e os testes do backend.
+- Informe os arquivos alterados e o resultado das validações.
