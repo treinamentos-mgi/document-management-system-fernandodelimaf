@@ -11,11 +11,17 @@ function errorHandler(error, req, res, next) {
   let message = statusCode < 500 ? error.message : 'Erro interno do servidor';
 
   if (error instanceof multer.MulterError) {
-    statusCode = error.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
-    errorCode = error.code === 'LIMIT_FILE_SIZE' ? 'file_too_large' : 'invalid_upload';
-    message = error.code === 'LIMIT_FILE_SIZE'
-      ? 'O arquivo excede o tamanho máximo permitido'
-      : 'O upload enviado é inválido';
+    const uploadErrors = {
+      LIMIT_FILE_SIZE: [413, 'file_too_large', 'O arquivo excede o tamanho máximo permitido'],
+      LIMIT_FILE_COUNT: [400, 'too_many_files', 'Envie somente um arquivo'],
+      LIMIT_FIELD_COUNT: [400, 'too_many_fields', 'O upload contém campos demais'],
+      LIMIT_PART_COUNT: [400, 'too_many_parts', 'O upload contém partes demais'],
+      LIMIT_FIELD_KEY: [400, 'field_name_too_large', 'O nome de um campo é muito longo'],
+      LIMIT_FIELD_VALUE: [400, 'field_value_too_large', 'O valor de um campo é muito longo'],
+      LIMIT_UNEXPECTED_FILE: [400, 'unexpected_file', 'O campo de arquivo não é permitido'],
+    };
+    [statusCode, errorCode, message] = uploadErrors[error.code]
+      || [400, 'invalid_upload', 'O upload enviado é inválido'];
   }
 
   res.status(statusCode).json({

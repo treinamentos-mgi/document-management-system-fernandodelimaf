@@ -26,16 +26,17 @@ async function createDocument(file, ownerId) {
     throw createError(400, 'owner_id_required', 'O campo ownerId é obrigatório');
   }
 
-  const document = {
-    id: crypto.randomUUID(),
-    originalName: file.originalname,
-    size: file.size,
-    uploadedAt: new Date().toISOString(),
-    owner,
-    storageName: file.filename,
-  };
-
   try {
+    await documentRepository.restrictFilePermissions(file.filename);
+    const document = {
+      id: crypto.randomUUID(),
+      originalName: file.originalname,
+      size: file.size,
+      uploadedAt: new Date().toISOString(),
+      owner,
+      storageName: file.filename,
+    };
+
     return toPublicDocument(documentRepository.save(document));
   } catch (error) {
     await documentRepository.removeUploadedFile(file.filename);
@@ -54,7 +55,7 @@ function listDocuments(ownerId) {
 }
 
 async function getDownload(id) {
-  const download = await documentRepository.findDownloadById(id);
+  const download = await documentRepository.openDownloadById(id);
 
   if (!download) {
     throw createError(404, 'document_not_found', 'Documento não encontrado');

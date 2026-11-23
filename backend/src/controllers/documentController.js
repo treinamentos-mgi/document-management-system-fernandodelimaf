@@ -19,11 +19,17 @@ function listDocuments(req, res) {
 async function downloadDocument(req, res, next) {
   const download = await documentService.getDownload(req.params.id);
 
-  res.download(download.filePath, download.originalName, (error) => {
-    if (error) {
+  res.attachment(download.originalName);
+  res.type('application/octet-stream');
+  res.setHeader('Content-Length', download.size);
+  download.stream.on('error', (error) => {
+    if (res.headersSent) {
+      res.destroy(error);
+    } else {
       next(error);
     }
   });
+  download.stream.pipe(res);
 }
 
 module.exports = {
